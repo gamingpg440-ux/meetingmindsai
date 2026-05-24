@@ -1,0 +1,94 @@
+# .cursorrules
+# MeetingMind — AI Coding Agent Rules
+# This file is read automatically by Cursor and Kilo Code on every prompt.
+# Do not delete or rename this file.
+
+## Project Summary
+This is a browser-based React web app called MeetingMind. It records meeting audio, transcribes speech in real time, generates AI-powered notes and action item summaries, stores them in a cloud database, and provides step-by-step AI guidance on tasks. It must work without any installation on a locked-down office laptop — just Chrome.
+
+## Tech Stack (do not deviate)
+- Framework: React 18 with TypeScript
+- Build tool: Vite
+- Styling: Tailwind CSS v3 + shadcn/ui components
+- Routing: react-router-dom v6
+- Database + Auth: Supabase (@supabase/supabase-js v2)
+- AI Model: Groq API (groq-sdk) — model: llama-3.3-70b-versatile
+- Speech: Browser-native Web Speech API (window.webkitSpeechRecognition)
+- Icons: lucide-react
+- Date formatting: date-fns
+- Hosting target: Vercel
+
+## Code Style Rules
+- Always use TypeScript. No plain .js files.
+- Use functional components and React hooks only. No class components.
+- Name components in PascalCase. Name files in kebab-case.
+- Keep components small. If a component exceeds 150 lines, split it.
+- Use Tailwind utility classes only. Do not write custom CSS files.
+- All colours must use the design token variables defined in tailwind.config.ts.
+- Never use inline styles.
+- Always handle loading and error states explicitly in every component.
+
+## File Structure
+src/
+  components/       # Reusable UI components
+  pages/            # Top-level route components (Dashboard, Session, NoteDetail, Login)
+  hooks/            # Custom React hooks (useSpeechRecognition, useNotes, useAuth)
+  lib/              # Supabase client, Anthropic client, utility functions
+  types/            # TypeScript interfaces and types
+  App.tsx           # Router and auth guard
+  main.tsx          # Entry point
+
+## Environment Variables
+All secrets live in .env (never committed to git).
+- VITE_SUPABASE_URL
+- VITE_SUPABASE_ANON_KEY
+- VITE_GROQ_API_KEY
+Access via: import.meta.env.VITE_*
+
+## Supabase Rules
+- Always use the Supabase client from src/lib/supabase.ts — never initialise it elsewhere.
+- Never bypass Row-Level Security. All queries go through the authenticated client.
+- Use typed responses: supabase.from('notes').select('*').returns<Note[]>()
+- Handle Supabase errors explicitly — never ignore the error object.
+
+## Anthropic API Rules
+- Always use model: 'claude-sonnet-4-6'
+- Set max_tokens: 1000 for summarisation calls.
+- Set max_tokens: 2000 for guidance and chat calls.
+- For summarisation, instruct the model to return only valid JSON. Parse safely with try/catch.
+- For guidance and chat, use streaming (stream: true) and pipe to the UI word by word.
+- Never expose the API key in rendered HTML or console logs.
+- Include the full meeting summary as system context when generating task guidance.
+
+## Web Speech API Rules
+- Initialise in a custom hook: src/hooks/useSpeechRecognition.ts
+- Always set: continuous = true, interimResults = true, lang = 'en-US'
+- Distinguish interim results (lighter text) from final results (normal text).
+- On recognitionend event, auto-restart if the session is still active (handles browser timeout).
+- On error event, set an error state and surface it to the UI. Never swallow errors silently.
+
+## Routing
+- /                → redirect to /dashboard if authenticated, else /login
+- /login           → Login page
+- /dashboard       → Dashboard (protected)
+- /session         → Active recording screen (protected)
+- /notes/:id       → Note detail view (protected)
+- /settings        → Settings (protected)
+All protected routes redirect to /login if user is not authenticated.
+
+## UI and Design
+- Follow the wireframes in DesignDocument.md exactly.
+- Colour palette: primary=#6366F1, background=#F9FAFB, surface=#FFFFFF, recording=#EF4444
+- Font: Inter for all UI text; JetBrains Mono for transcript text only.
+- Guidance panel slides in from the right on desktop; bottom sheet on mobile.
+- All action items are clickable cards with a "Get Help →" button.
+- Empty states, error states, and loading states must be implemented for every screen.
+
+## What NOT to do
+- Do not use Redux, Zustand, or any external state manager. Use React Context + useState.
+- Do not use localStorage or sessionStorage for user data. Use Supabase only.
+- Do not use axios. Use the Supabase client and Anthropic SDK which handle HTTP internally.
+- Do not use Next.js features (server components, server actions). This is a pure Vite SPA.
+- Do not add any package not listed in TechStack.md without asking first.
+- Do not generate placeholder or TODO comments — implement the actual logic.
+- Do not skip TypeScript types — every function parameter and return value must be typed.
