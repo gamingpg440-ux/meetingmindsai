@@ -1,5 +1,6 @@
 import Groq from 'groq-sdk'
 import type { ChatMessage } from '../types'
+import type { ChatCompletionMessageParam } from 'groq-sdk/resources/chat/completions'
 
 const groq = new Groq({
   apiKey: import.meta.env.VITE_GROQ_API_KEY,
@@ -17,21 +18,22 @@ export async function* streamGuidance(
 
 Meeting context: ${meetingSummary}`
 
-  const messages: Record<string, unknown>[] = [
+  const messages: ChatCompletionMessageParam[] = [
     { role: 'system', content: systemPrompt },
-    ...chatHistory,
+    ...chatHistory.map(msg => ({ role: msg.role, content: msg.content })),
     { role: 'user', content: `Action item: "${actionItem}"\n\nProvide step-by-step guidance.` },
   ]
 
-  const stream = await groq.messages.stream({
+  const stream = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
     max_tokens: 2048,
     messages,
+    stream: true,
   })
 
   for await (const chunk of stream) {
-    if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
-      yield chunk.delta.text
+    if (chunk.choices[0]?.delta?.content) {
+      yield chunk.choices[0].delta.content
     }
   }
 }
