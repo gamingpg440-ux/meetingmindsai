@@ -14,43 +14,49 @@ export default function GuidancePanel({ actionItem, summary, onClose }: Guidance
   const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [currentStreaming, setCurrentStreaming] = useState('')
+  const [error, setError] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const guidanceTextRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    let isMounted = true
-    const startStreaming = async () => {
-      setIsLoading(true)
-      setCurrentStreaming('')
-      try {
-        for await (const chunk of streamGuidance(actionItem, summary, [])) {
-          if (isMounted) {
-            setCurrentStreaming((prev) => prev + chunk)
-          }
-        }
-        if (isMounted) {
-          setMessages((prev) => [...prev, { role: 'assistant', content: currentStreaming }])
-          setCurrentStreaming('')
-        }
-      } catch {
-        if (isMounted) {
-          setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, I encountered an error generating guidance.' }])
-          setCurrentStreaming('')
-        }
-      } finally {
-        if (isMounted) {
-          setIsLoading(false)
-        }
-      }
-    }
-    startStreaming()
-    return () => { isMounted = false }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [actionItem, summary])
+  const streamingContentRef = useRef('')
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, currentStreaming])
+
+  useEffect(() => {
+    let cancelled = false
+    const initStream = async () => {
+      streamingContentRef.current = ''
+      setCurrentStreaming('')
+      setIsLoading(true)
+      setError(null)
+
+      try {
+        for await (const chunk of streamGuidance(actionItem, summary, [])) {
+          if (!cancelled) {
+            streamingContentRef.current += chunk
+            setCurrentStreaming(streamingContentRef.current)
+          }
+        }
+        if (!cancelled) {
+          setMessages((prev) => [...prev, { role: 'assistant', content: streamingContentRef.current }])
+          setCurrentStreaming('')
+        }
+      } catch {
+        if (!cancelled) {
+          setError('Sorry, I encountered an error generating guidance.')
+          setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, I encountered an error generating guidance.' }])
+          setCurrentStreaming('')
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false)
+        }
+      }
+    }
+    initStream()
+    return () => { cancelled = true }
+  }, [actionItem, summary])
 
   const handleSend = async () => {
     const text = input.trim()
@@ -60,16 +66,21 @@ export default function GuidancePanel({ actionItem, summary, onClose }: Guidance
     const newMessages = [...messages, userMessage]
     setMessages(newMessages)
     setInput('')
-    setCurrentStreaming('')
-    setIsLoading(true)
+    setError(null)
 
     try {
+      streamingContentRef.current = ''
+      setCurrentStreaming('')
+      setIsLoading(true)
+
       for await (const chunk of streamGuidance(actionItem, summary, newMessages)) {
-        setCurrentStreaming((prev) => prev + chunk)
+        streamingContentRef.current += chunk
+        setCurrentStreaming(streamingContentRef.current)
       }
-      setMessages((prev) => [...prev, { role: 'assistant', content: currentStreaming }])
+      setMessages((prev) => [...prev, { role: 'assistant', content: streamingContentRef.current }])
       setCurrentStreaming('')
     } catch {
+      setError('Sorry, I encountered an error.')
       setMessages((prev) => [...prev, { role: 'assistant', content: 'Sorry, I encountered an error.' }])
       setCurrentStreaming('')
     } finally {
@@ -120,6 +131,12 @@ export default function GuidancePanel({ actionItem, summary, onClose }: Guidance
             {actionItem}
           </span>
 
+          {error && (
+            <div className="self-start max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed bg-red-50 border border-red-200 text-red-600 rounded-bl-sm shadow-sm">
+              {error}
+            </div>
+          )}
+
           <div className="flex flex-col gap-3">
             {messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -138,6 +155,13 @@ export default function GuidancePanel({ actionItem, summary, onClose }: Guidance
               <div className="flex justify-start">
                 <div className="max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm">
                   {currentStreaming}
+                </div>
+              </div>
+            )}
+            {isLoading && !currentStreaming && (
+              <div className="flex justify-start">
+                <div className="max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed bg-white border border-gray-200 text-gray-400 rounded-bl-sm shadow-sm animate-pulse">
+                  Thinking...
                 </div>
               </div>
             )}

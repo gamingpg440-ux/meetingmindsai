@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { format } from 'date-fns'
-import { Trash2, Pencil, ChevronDown, ChevronUp, Calendar, Clock, Timer, Save, X } from 'lucide-react'
+import { Trash2, Calendar, Clock } from 'lucide-react'
 import { useNotes } from '../hooks/useNotes'
 import TopBar from '../components/TopBar'
 import ActionItemCard, { type ActionItem } from '../components/ActionItemCard'
@@ -17,23 +17,16 @@ export default function NoteDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedItem, setSelectedItem] = useState<ActionItem | null>(null)
-  const [isEditing, setIsEditing] = useState(false)
   const [transcriptOpen, setTranscriptOpen] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
-  const { getNoteById, updateNote, deleteNote } = useNotes()
+  const { getNoteById, deleteNote } = useNotes()
 
-  // Fetch note on mount
   useEffect(() => {
-    if (!id) {
-      setError('Note ID not found')
-      setLoading(false)
-      return
-    }
+    if (!id) return
 
     let cancelled = false
-    const fetchNote = async () => {
-      try {
-        const data = await getNoteById(id)
+    getNoteById(id)
+      .then((data) => {
         if (!cancelled) {
           if (!data) {
             setError('Note not found')
@@ -41,33 +34,32 @@ export default function NoteDetailPage() {
             setNote(data)
           }
         }
-      } catch (err) {
+      })
+      .catch((err) => {
         if (!cancelled) {
           setError('Failed to load note')
           console.error(err)
         }
-      } finally {
+      })
+      .finally(() => {
         if (!cancelled) {
           setLoading(false)
         }
-      }
-    }
-    fetchNote()
+      })
     return () => { cancelled = true }
   }, [id, getNoteById])
 
-  // Handle states
   if (loading) return <LoadingOverlay />
-  if (error || !note) {
+
+  if (!id || error || !note) {
     return (
       <div className="min-h-screen bg-[#F9FAFB] flex items-center justify-center">
-        {error && <ErrorBanner message={error} />}
-        {!error && <p className="text-gray-600">Note not found</p>}
+        {(!id || error) && <ErrorBanner message={error || 'Note ID not found'} />}
+        {!error && !id && <p className="text-gray-600">Note not found</p>}
       </div>
     )
   }
 
-  // Show AI generating state if title not yet set
   if (!note.title) {
     return (
       <div className="min-h-screen bg-[#F9FAFB] flex items-center justify-center">
@@ -79,43 +71,20 @@ export default function NoteDetailPage() {
     )
   }
 
-  // Format date/time
   const date = new Date(note.created_at)
   const dateStr = format(date, 'd MMM yyyy')
   const timeStr = format(date, 'HH:mm')
 
-  // Prepare action items (ensuring they're never null)
   const actionItems: ActionItem[] = (note.action_items || []).map((item, idx) => ({
     id: `${idx}`,
     text: item,
   }))
 
-  // Handlers
-  const handleSaveEdit = async () => {
-    try {
-      const updated = await updateNote(id, {
-        title: note.title || '',
-        summary: note.summary || '',
-        action_items: actionItems.map(item => item.text),
-      })
-      setNote(updated)
-      setIsEditing(false)
-    } catch (err) {
-      setError('Failed to save. Please try again.')
-    }
-  }
-
-  const handleCancelEdit = () => {
-    // Revert to original note data
-    setNote(note) // This will trigger a re-render with original data from state
-    setIsEditing(false)
-  }
-
   const handleDelete = async () => {
     try {
       await deleteNote(id)
       navigate('/dashboard')
-    } catch (err) {
+    } catch {
       setError('Failed to delete. Please try again.')
       setDeleteConfirm(false)
     }
@@ -124,46 +93,16 @@ export default function NoteDetailPage() {
   return (
     <div className="min-h-screen bg-[#F9FAFB]">
       <TopBar
-        title={isEditing ? 'Editing note...' : note.title || 'Untitled Meeting'}
+        title={note.title || 'Untitled Meeting'}
         showBack
         rightElement={
-          <>
-            {isEditing ? (
-              <>
-                <button
-                  onClick={handleCancelEdit}
-                  className="flex items-center justify-center w-9 h-9 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1"
-                  aria-label="Cancel edit"
-                >
-                  <X size={16} />
-                </button>
-                <button
-                  onClick={handleSaveEdit}
-                  className="flex items-center justify-center w-9 h-9 rounded-lg bg-primary text-white text-sm font-semibold px-3 py-2 rounded-lg hover:bg-primary-hover transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1"
-                  aria-label="Save note"
-                >
-                  <Save size={16} />
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={() => setDeleteConfirm(true)}
-                  className="flex items-center justify-center w-9 h-9 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1"
-                  aria-label="Delete note"
-                >
-                  <Trash2 size={16} />
-                </button>
-                <button
-                  onClick={() => setIsEditing(true)}
-                  className="flex items-center justify-center w-9 h-9 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1"
-                  aria-label="Edit note"
-                >
-                  <Pencil size={16} />
-                </button>
-              </>
-            )}
-          </>
+          <button
+            onClick={() => setDeleteConfirm(true)}
+            className="flex items-center justify-center w-9 h-9 rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-1"
+            aria-label="Delete note"
+          >
+            <Trash2 size={16} />
+          </button>
         }
       />
 
@@ -177,10 +116,6 @@ export default function NoteDetailPage() {
             <Clock size={13} />
             {timeStr}
           </span>
-          <span className="flex items-center gap-1.5 text-xs text-gray-500">
-            <Timer size={13} />
-            12 min
-          </span>
         </div>
 
         <div className="flex flex-col gap-6 pb-8">
@@ -188,18 +123,9 @@ export default function NoteDetailPage() {
             <h2 className="text-xs font-semibold text-primary uppercase tracking-widest mb-3">
               Summary
             </h2>
-            {isEditing ? (
-              <textarea
-                value={note.summary || ''}
-                onChange={(e) => setNote(prev => prev ? { ...prev, summary: e.target.value } : null)}
-                className="w-full min-h-20 p-3 border border-gray-200 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
-                placeholder="Summary..."
-              />
-            ) : (
-              <p className="text-sm text-gray-700 leading-relaxed">
-                {note.summary || 'No summary available yet.'}
-              </p>
-            )}
+            <p className="text-sm text-gray-700 leading-relaxed">
+              {note.summary || 'No summary available yet.'}
+            </p>
           </section>
 
           <hr className="border-gray-200" />
@@ -212,23 +138,12 @@ export default function NoteDetailPage() {
               <p className="text-sm text-gray-500">No action items.</p>
             ) : (
               <div className="flex flex-col gap-2.5">
-                {actionItems.map((item, index) => (
-                  <div key={item.id} className="flex items-start gap-3 p-3 rounded-lg border transition-all duration-200">
-                    <input
-                      type="text"
-                      value={item.text}
-                      onChange={(e) => {
-                        // Create a copy of actionItems array
-                        const updatedItems = [...actionItems]
-                        // Update the specific item
-                        updatedItems[index] = { ...updatedItems[index], text: e.target.value }
-                        // Update the note's action_items
-                        setNote(prev => prev ? { ...prev, action_items: updatedItems.map(i => i.text) } : null)
-                      }}
-                      className="flex-1 text-sm text-gray-800 leading-relaxed"
-                      placeholder="Action item..."
-                    />
-                  </div>
+                {actionItems.map((item) => (
+                  <ActionItemCard
+                    key={item.id}
+                    item={item}
+                    onGetHelp={setSelectedItem}
+                  />
                 ))}
               </div>
             )}
@@ -245,9 +160,6 @@ export default function NoteDetailPage() {
               <h2 className="text-xs font-semibold text-primary uppercase tracking-widest">
                 Raw Transcript
               </h2>
-              <span className="text-gray-400 group-hover:text-gray-600 transition-colors">
-                {transcriptOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-              </span>
             </button>
             {transcriptOpen && (
               <div className="mt-3 bg-white border border-gray-200 rounded-xl p-4 overflow-x-auto">
